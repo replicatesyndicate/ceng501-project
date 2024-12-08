@@ -64,7 +64,58 @@ p^{safe}_{s} = \kappa * p_{s} + (1 - \kappa) * p^{c}_{s}
 
 ## 2.2. Our interpretation
 
-@TODO: Explain the parts that were not clearly explained in the original paper and how you interpreted them.
+The original paper uses Stable-Baselines3 as its primary framework, and its main mechanisms are clearly explained. However, to the best of our knowledge, Stable-Baselines3 does not support a multi-agent structure or a reset mechanism. Below, we outline our approach to implementing these features.
+
+### 1. **Reset Mechanism**
+
+We identified two potential methods for implementing the reset mechanism,
+
+- Implementing a new $DQN$ algorithm that supports reset mechanism with a configurable frequency parameter while preserving the main functionality of the $DQN$ algorithm from Stable-Baselines3. 
+- Utilizing a callback object to reset the model's weights during training at specified intervals.
+
+Our implementation adopts the callback-based approach, where a custom callback object handles the resetting of the model's weights at a specified replay frequency. This callback reinitializes the weights of the model. Below is the implementation,
+
+```
+
+# Function to reset weights
+def reset_weights(layer):
+    if isinstance(layer, (nn.Conv2d, nn.Linear)):
+        layer.reset_parameters()
+
+# Custom callback to reset weights during training
+class ResetWeightsCallback(BaseCallback):
+    def __init__(self, reset_interval, verbose=0):
+        super().__init__(verbose)
+        self.reset_interval = reset_interval  # Number of steps between resets
+
+    def _on_step(self) -> bool:
+        # Reset weights every reset_interval steps
+        if self.n_calls % self.reset_interval == 0: # n_calls inherited from BaseCallback
+            if self.verbose > 0:
+                print(f"Resetting weights at step {self.n_calls}...")
+            # Reset q_net and q_net_target
+            self.model.policy.q_net.apply(reset_weights)
+            self.model.policy.q_net_target.apply(reset_weights)
+        return True
+
+reset_callback = ResetWeightsCallback(reset_interval, verbose=1)
+
+```
+
+### 2. Multi-Agent Structure
+
+To the best of our knowledge, Stable-Baselines3 does not natively support a multi-agent structure where agents share a common replay buffer but maintain independent $DQN$ models. To address this limitation, we propose creating a custom DQN implementation that,
+
+- Maintains a list of agents, each with its own $DQN$ structure.
+- Shares a centralized replay buffer among all agents.
+
+### 3. Sequential Resets
+
+@TODO: This section will be implemented after completing the Multi-Agent structure.
+
+### 4. Adaptive Action Selection
+
+@TODO: This section will be implemented after completing the Multi-Agent structure.
 
 # 3. Experiments and results
 
