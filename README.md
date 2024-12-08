@@ -119,7 +119,9 @@ To the best of our knowledge, Stable-Baselines3 does not natively support a mult
 
 # 3. Experiments and results
 
-## 3.1. Experimental setup of the Original Paper
+### 3.1 Experimental setup
+
+### 3.1.1. Experimental setup of the Original Paper
 
 The original paper conducted experiments across a diverse range of tasks and environments. A summary of their setup is shown in the following parts.
 
@@ -141,14 +143,9 @@ The original paper conducted experiments across a diverse range of tasks and env
 - **Replay Ratio**: Tested with values like 1, 2, and 4 to analyze the impact of primacy bias.
 - **Ensemble Size**: Typically two agents, but experiments were conducted with larger ensembles for robustness.
 
-## 3.2. Experimental setup of Our Current Implementation
+### 3.1.2. Experimental setup of Our Current Implementation
 
 Currently, we focused on on exploring single-agent with **Base Algorithm (DQN)** and **Vanilla Reset Method (SR+DQN)**. Initial experiments conducted in **Alien** environment from **Atari-100k**. We investigated the effects of the **Replay Ratio** and **Replay Ratio**. 
-
-### Environments
-- **Atari-100k**: $Alien$ is selected as the first environment to obtain the results
-- **Reset Mechanism**: We implemented a callback-based reset mechanism instead of modifying the DQN algorithm to integrate resets directly, ensuring ease of adaptability and reduced implementation complexity.
-- **Multi-Agent Setup**: Currently, we focused on exploring single-agent approach
 
 ## 3.2. Running the code
 
