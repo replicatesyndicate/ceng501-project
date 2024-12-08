@@ -119,9 +119,36 @@ To the best of our knowledge, Stable-Baselines3 does not natively support a mult
 
 # 3. Experiments and results
 
-## 3.1. Experimental setup
+## 3.1. Experimental setup of the Original Paper
 
-@TODO: Describe the setup of the original paper and whether you changed any settings.
+The original paper conducted experiments across a diverse range of tasks and environments. A summary of their setup is shown in the following parts.
+
+### Environments
+- **Atari-100k**: Discrete action tasks with up to 100k environment steps
+- **DeepMind Control Suite (DMC)**: Continuous control tasks with high-dimensional systems
+- **MiniGrid**: Sparse reward environments with goal-oriented tasks
+- **Safety-Gym**: Environments with safety constraints
+
+### Algorithms
+
+- **Base Algorithm (X)**: Standard SAC or DQN.
+- **Vanilla Reset Method (SR+X)**: Periodic resets preserving the replay buffer.
+- **Proposed Method (RDE+X)**: Ensemble-based reset mechanism with adaptive integration.
+
+### Key Hyperparameters
+
+- **Reset Frequency**: Reset intervals adjusted based on the environment and replay ratio.
+- **Replay Ratio**: Tested with values like 1, 2, and 4 to analyze the impact of primacy bias.
+- **Ensemble Size**: Typically two agents, but experiments were conducted with larger ensembles for robustness.
+
+## 3.2. Experimental setup of Our Current Implementation
+
+Currently, we focused on on exploring single-agent with **Base Algorithm (DQN)** and **Vanilla Reset Method (SR+DQN)**. Initial experiments conducted in **Alien** environment from **Atari-100k**. We investigated the effects of the **Replay Ratio** and **Replay Ratio**. 
+
+### Environments
+- **Atari-100k**: $Alien$ is selected as the first environment to obtain the results
+- **Reset Mechanism**: We implemented a callback-based reset mechanism instead of modifying the DQN algorithm to integrate resets directly, ensuring ease of adaptability and reduced implementation complexity.
+- **Multi-Agent Setup**: Currently, we focused on exploring single-agent approach
 
 ## 3.2. Running the code
 
