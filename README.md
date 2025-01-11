@@ -68,39 +68,20 @@ The original paper uses Stable-Baselines3 [[5]] as its primary framework, and it
 
 ### 1. **Reset Mechanism**
 
-We identified two potential methods for implementing the reset mechanism,
+The **Reset Mechanism** in the RDE framework is designed to eliminate primacy bias by reinitializing the parameters of ensemble agents periodically while preserving the replay buffer. This approach ensures that the agents can benefit from high replay ratios without suffering from overfitting to early experiences. Below are the key details of the implementation:
 
-- Implementing a new $DQN$ algorithm that supports reset mechanism with a configurable frequency parameter while preserving the main functionality of the $DQN$ algorithm from Stable-Baselines3. 
-- Utilizing a callback object to reset the model's weights during training at specified intervals.
+1. **Configurable Reset Depth**
+  - **full**: Reinitializes all layers of the neural network. 
+  - **last1**: Only reinitializes the last layer of the network. 
+  - **last2**: Only reinitializes the last two layers of the network. 
+  - The depth of reset can be configured based on the environment and the complexity of the task. In the original paper they selected different reset depths for various environments and tasks.
 
-Our implementation adopts the callback-based approach, where a custom callback object handles the resetting of the model's weights at a specified replay frequency. This callback reinitializes the weights of the model. Below is the implementation,
+2. **Replay Buffer Preservation**
+  - The replay buffer is preserved across resets. This ensures that agents can continue learning from previously gathered data without starting completely from scratch, providing sample efficiency.
 
-```
+3. **Sequential Reset**
 
-# Function to reset weights
-def reset_weights(layer):
-    if isinstance(layer, (nn.Conv2d, nn.Linear)):
-        layer.reset_parameters()
-
-# Custom callback to reset weights during training
-class ResetWeightsCallback(BaseCallback):
-    def __init__(self, reset_interval, verbose=0):
-        super().__init__(verbose)
-        self.reset_interval = reset_interval  # Number of steps between resets
-
-    def _on_step(self) -> bool:
-        # Reset weights every reset_interval steps
-        if self.n_calls % self.reset_interval == 0: # n_calls inherited from BaseCallback
-            if self.verbose > 0:
-                print(f"Resetting weights at step {self.n_calls}...")
-            # Reset q_net and q_net_target
-            self.model.policy.q_net.apply(reset_weights)
-            self.model.policy.q_net_target.apply(reset_weights)
-        return True
-
-reset_callback = ResetWeightsCallback(reset_interval, verbose=1)
-
-```
+  - Ensemble agents are reset in a sequential manner. At each reset interval $T_{reset}$, a single agent is selected for reset while others continue training. This minimizes performance collapses by always having $N-1$ non-reset agents to stabilize the composite policy. Moreover, the oldest agent is selected for reset which ensures the elimination of the bias in action selection. 
 
 ### 2. Multi-Agent Structure
 
