@@ -47,7 +47,7 @@ MIN_REPLAY_SIZE    = 10_000
 TOTAL_TIMESTEPS    = 100_000
 
 TRAIN_FREQUENCY    = 1        # steps between each training call
-UPDATES_PER_STEP   = 2        # replay ratio
+UPDATES_PER_STEP   = 1        # replay ratio
 TARGET_UPDATE_FREQ = 1        # update target after each train step
 MAX_GRAD_NORM      = 10
 
@@ -233,11 +233,10 @@ class ResetDQNAgent:
         print(f"Model saved to {path}")
 
     def load_model(self, path="q_network.pth"):
-        ckpt = torch.load(path, map_location=self.device)
+        ckpt = torch.load(path, map_location=self.device, weights_only= True)
         self.q_network.load_state_dict(ckpt)
         self.update_target_net()
         print(f"Model loaded from {path}")
-
 
 # Make single VecEnv
 def make_vec_env(env_id=ENV_ID, seed=42):
@@ -339,8 +338,10 @@ def run_training():
     print(f"Training done. Final 10-ep average reward: {final_10:.2f}")
 
 # Evaluate loaded model
-def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05):
-    env = make_vec_env(ENV_ID)
+def evaluate_model(model_path=MODEL_PATH, episodes=10, eval_epsilon=0.05):
+    random_seed = random.randint(0, 2**32 - 1)
+    print(f"Using random seed: {random_seed}")
+    env = make_vec_env(ENV_ID, random_seed)
     n_actions = env.action_space.n
 
     agent = ResetDQNAgent(n_actions, reset_depth=RESET_DEPTH, writer=None)
