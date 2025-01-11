@@ -47,7 +47,7 @@ MIN_REPLAY_SIZE    = 10_000
 TOTAL_TIMESTEPS    = 100_000
 
 TRAIN_FREQUENCY    = 1        # steps between each training call
-UPDATES_PER_STEP   = 1        # replay ratio
+UPDATES_PER_STEP   = 4        # replay ratio
 TARGET_UPDATE_FREQ = 1        # update target after each train step
 MAX_GRAD_NORM      = 10
 
