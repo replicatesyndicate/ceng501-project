@@ -431,7 +431,7 @@ def run_training():
     print(f"Training done. Final 10-ep avg reward: {final_10:.2f}")
 
 # Evaluation
-def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05):
+def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05, eval_render=False):
     random_seed = random.randint(0, 2**32 - 1)
     print(f"Using random seed: {random_seed}")
     env = make_vec_env(ENV_ID, seed=random_seed)  # different seed if desired
@@ -453,14 +453,22 @@ def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05):
 
         done = False
         ep_rew = 0.0
+
+        step = 1
         while not done:
             obs_np = env.current_obs
             action = agent.select_evaluation_action(obs_np[0], epsilon=eval_epsilon)
             # action = agent.select_action(obs_np[0], epsilon=eval_epsilon)
             next_obs, reward, done_bool, info = env.step([action])
+            if eval_render:
+                env.render("human")
             ep_rew += float(reward[0])
             env.current_obs = next_obs
 
+            if step % 250 == 0:
+                print(f"Eval: [rde_ensemble_{ENV_ID}_seed{SEED}_rr{UPDATES_PER_STEP}] -- Ep={ep} | Step={step} | AvgReward={ep_rew/step:.2f}")
+
+            step += 1
             done = bool(done_bool[0])
 
         episode_rewards.append(ep_rew)
@@ -475,9 +483,10 @@ if __name__ == "__main__":
     parser.add_argument("--evaluate", action="store_true", help="Evaluate saved RDE ensemble.")
     parser.add_argument("--episodes", type=int, default=5, help="# of evaluation episodes.")
     parser.add_argument("--eval_epsilon", type=float, default=0.05, help="Epsilon during evaluation.")
+    parser.add_argument("--eval_render", type=bool, default=False, help="Render evaluations on screen.")
     args = parser.parse_args()
 
     if args.evaluate:
-        evaluate_model(model_path=MODEL_PATH, episodes=args.episodes, eval_epsilon=args.eval_epsilon)
+        evaluate_model(model_path=MODEL_PATH, episodes=args.episodes, eval_epsilon=args.eval_epsilon, eval_render=args.eval_render)
     else:
         run_training()
