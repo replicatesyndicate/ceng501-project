@@ -190,6 +190,33 @@ class RDEAgent:
         self.last_reset_idx  = 0  # which agent to reset next
         self.oldest_agent_idx= 1 % self.n_ensemble  # "oldest" after first reset
 
+    def select_evaluation_action(self, obs_np, epsilon=0.05):
+        """
+        Epsilon-greedy selection that returns the best action
+        across all ensemble networks based on the highest Q-value.
+        """
+        # Epsilon-greedy: take random action with probability epsilon
+        if random.random() < epsilon:
+            return random.randint(0, self.n_actions - 1)
+
+        # Preprocess observation: from (84,84,4) channels-last to channels-first
+        obs_ch_first = np.transpose(obs_np, (2, 0, 1))
+        obs_t = torch.from_numpy(obs_ch_first).unsqueeze(0).float().to(self.device)
+
+        best_val = -float('inf')
+        best_act = None
+
+        # Evaluate each network's Q-values and select the highest scoring action
+        with torch.no_grad():
+            for qnet in self.q_networks:
+                qvals = qnet(obs_t)
+                val, act = qvals.max(dim=1)  # maximum Q-value and corresponding action
+                if val.item() > best_val:
+                    best_val = val.item()
+                    best_act = act.item()
+
+        return best_act
+
     def select_action(self, obs_np, epsilon=0.05):
         """
         Epsilon-greedy on top of the ensemble composition.
@@ -317,7 +344,7 @@ class RDEAgent:
 
     def load_ensemble(self, path=MODEL_PATH):
         """Load from the saved list of Q-network state_dicts."""
-        ensemble_states = torch.load(path, map_location=self.device)
+        ensemble_states = torch.load(path, map_location=self.device, weights_only= True)
         if len(ensemble_states) != self.n_ensemble:
             raise ValueError("Ensemble checkpoint mismatch: # of states != # of agents.")
         for i in range(self.n_ensemble):
@@ -403,10 +430,11 @@ def run_training():
     final_10 = np.mean(rewards_history[-10:]) if len(rewards_history)>=10 else 0
     print(f"Training done. Final 10-ep avg reward: {final_10:.2f}")
 
-
 # Evaluation
 def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05):
-    env = make_vec_env(ENV_ID, seed=SEED+100)  # different seed if desired
+    random_seed = random.randint(0, 2**32 - 1)
+    print(f"Using random seed: {random_seed}")
+    env = make_vec_env(ENV_ID, seed=random_seed)  # different seed if desired
     n_actions = env.action_space.n
 
     agent = RDEAgent(
@@ -427,7 +455,8 @@ def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05):
         ep_rew = 0.0
         while not done:
             obs_np = env.current_obs
-            action = agent.select_action(obs_np[0], epsilon=eval_epsilon)
+            action = agent.select_evaluation_action(obs_np[0], epsilon=eval_epsilon)
+            # action = agent.select_action(obs_np[0], epsilon=eval_epsilon)
             next_obs, reward, done_bool, info = env.step([action])
             ep_rew += float(reward[0])
             env.current_obs = next_obs
@@ -440,10 +469,7 @@ def evaluate_model(model_path=MODEL_PATH, episodes=5, eval_epsilon=0.05):
     avg_rew = np.mean(episode_rewards)
     print(f"Evaluation over {episodes} episodes at eps={eval_epsilon}: average reward={avg_rew:.2f}")
 
-
-# --------------------------------------------------------------------------
 # Main
-# --------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--evaluate", action="store_true", help="Evaluate saved RDE ensemble.")
