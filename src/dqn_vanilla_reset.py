@@ -36,7 +36,7 @@ from stable_baselines3.common.vec_env import VecFrameStack
 from torch.utils.tensorboard import SummaryWriter
 
 # Hyperparams
-ENV_ID             = "Freeway-v4"
+ENV_ID             = "MsPacmanNoFrameskip-v4"
 
 LR                 = 1e-4
 GAMMA              = 0.99

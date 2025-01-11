@@ -34,7 +34,7 @@ from stable_baselines3.common.vec_env import VecFrameStack
 from torch.utils.tensorboard import SummaryWriter
 
 #Hyperparameters
-ENV_ID             = "Freeway-v4"
+ENV_ID             = "MsPacmanNoFrameskip-v4"
 SEED               = 42
 
 # Ensemble
