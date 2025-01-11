@@ -52,8 +52,8 @@ MIN_REPLAY_SIZE    = 10_000
 TOTAL_TIMESTEPS    = 100_000
 
 TRAIN_FREQUENCY    = 1         # 1 training call per env step
-UPDATES_PER_STEP   = 1         # replay ratio => 4
-TARGET_UPDATE_FREQ = 1         # update target net after each training step
+UPDATES_PER_STEP   = 2         # replay ratio => 4 # NOTE: CONTROLLED PARAMETER
+TARGET_UPDATE_FREQ = 1        # update target net after each training step
 MAX_GRAD_NORM      = 10
 
 # Epsilon schedule
