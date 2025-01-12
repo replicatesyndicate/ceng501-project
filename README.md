@@ -66,37 +66,178 @@ p^{safe}_{s} = \kappa * p_{s} + (1 - \kappa) * p^{c}_{s}
 
 The original paper uses Stable-Baselines3 [[5]] as its primary framework, and its main mechanisms are clearly explained. However, to the best of our knowledge, Stable-Baselines3 does not support a multi-agent structure or a reset mechanism. Below, we outline our approach to implementing these features.
 
-### 1. **Reset Mechanism**
+### 1. **Sequential Reset Mechanism**
 
-The **Reset Mechanism** in the RDE framework is designed to eliminate primacy bias by reinitializing the parameters of ensemble agents periodically while preserving the replay buffer. This approach ensures that the agents can benefit from high replay ratios without suffering from overfitting to early experiences. Below are the key details of the implementation:
+The **Sequential Reset Mechanism** is a core innovation in the RDE framework that effectively mitigates primacy bias and prevents performance collapses caused by weight reseting. This approach ensures that the agents can benefit from high replay ratios without suffering from overfitting to early experiences. Below are the key details of the implementation:
 
 1. **Configurable Reset Depth**
-  - **full**: Reinitializes all layers of the neural network. 
-  - **last1**: Only reinitializes the last layer of the network. 
-  - **last2**: Only reinitializes the last two layers of the network. 
-  - The depth of reset can be configured based on the environment and the complexity of the task. In the original paper they selected different reset depths for various environments and tasks.
+    - **full**: Reinitializes all layers of the neural network. 
+    - **last1**: Only reinitializes the last layer of the network. 
+    - **last2**: Only reinitializes the last two layers of the network. 
+    - The depth of reset can be configured based on the environment and the complexity of the task. In the original paper they selected different reset depths for various environments and tasks.
 
 2. **Replay Buffer Preservation**
-  - The replay buffer is preserved across resets. This ensures that agents can continue learning from previously gathered data without starting completely from scratch, providing sample efficiency.
+    - The replay buffer is preserved across resets, allowing agents to learn from previously collected experiences without requiring new interactions with environment.
 
 3. **Sequential Reset**
+    - At predefined intervals a single agent (the next one in the sequence) in the ensemble is selected for reset (parameter reinitialization), while others remain stable. The resetted agent is added to the end of the reset sequence.
 
-  - Ensemble agents are reset in a sequential manner. At each reset interval $T_{reset}$, a single agent is selected for reset while others continue training. This minimizes performance collapses by always having $N-1$ non-reset agents to stabilize the composite policy. Moreover, the oldest agent is selected for reset which ensures the elimination of the bias in action selection. 
+#### Implementation
+
+1. Sequential selection
+```python
+    if (self.global_step>0) and (self.global_step % RESET_FREQUENCY == 0):
+        self.writer.add_scalar("ResetAgentIdx", self.last_reset_idx, episode_count)
+        print(f"[INFO] Sequential reset: agent {self.last_reset_idx} at step={self.global_step}")
+        self.reset_agent(self.last_reset_idx)
+        self.oldest_agent_idx = (self.last_reset_idx + 1) % self.n_ensemble
+        self.last_reset_idx   = (self.last_reset_idx + 1) % self.n_ensemble
+
+```
+
+2. Reset application
+```python
+    def reset_parameters(self, reset_depth="full"):
+        """
+        Re-init some or all layers:
+         'full' => re-init conv + fc
+         'last2' => re-init last 2 layers in self.fc
+         'last1' => re-init only final linear layer
+        """
+        def _init_layer(m):
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+
+        if reset_depth == "full":
+            self.apply(_init_layer)
+
+        elif reset_depth == "last2":
+            if len(self.fc) == 3:  # [Linear -> ReLU -> Linear]
+                _init_layer(self.fc[-1])  # final linear
+                _init_layer(self.fc[-3])  # linear before ReLU
+            else:
+                raise ValueError("Unexpected architecture for partial reset (last2).")
+
+        elif reset_depth == "last1":
+            if len(self.fc) == 3:
+                _init_layer(self.fc[-1])
+            else:
+                raise ValueError("Unexpected architecture for partial reset (last1).")
+
+        else:
+            raise ValueError("Unknown reset depth option.")
+```
 
 ### 2. Multi-Agent Structure
 
-To the best of our knowledge, Stable-Baselines3 does not natively support a multi-agent structure where agents share a common replay buffer but maintain independent $DQN$ models. To address this limitation, we propose creating a custom DQN implementation that,
+The **Multi-Agent Structure (Ensemble)** is a core component of the RDE framework. Main idea is maintaining a group of agents, each with its own Q-network and optimizer, while sharing a centralized replay buffer. This structure tries to achieve diversity in learning while eliminating performance collapses in case of a agent's reset by depending other agents in the esemble. Below are the key details of the implementation:
 
-- Maintains a list of agents, each with its own $DQN$ structure.
-- Shares a centralized replay buffer among all agents.
+1. **Ensemble of Agents**
+    - The implementation creates $N$ agents, each with an identical neural network architecture but independently initialized parameters.
+    - Each agent interacts with the environment, contributes to the shared replay buffer.
+    - Each agent has its own Q-network and target network that are independently updated using the shared replay buffer.
+    - Each agent has its own optimizer, which allows independent gradient updates.
 
-### 3. Sequential Resets
+2. **Shared Replay Buffer**
+    - A single centralized replay buffer is used by all agents, which stores environment transitions.
+    - The shared buffer ensures that all agents learn from available experiences, improving sample efficiency and reducing redundancy.
 
-@TODO: This section will be implemented after completing the Multi-Agent structure.
+#### 2.1 Implementation
 
-### 4. Adaptive Action Selection
+1. Creation of ensemble of agents
+```python
+        for _ in range(n_ensemble):
+            qnet = QNetworkAtari(n_actions).to(self.device)
+            tnet = QNetworkAtari(n_actions).to(self.device)
+            tnet.load_state_dict(qnet.state_dict())
 
-@TODO: This section will be implemented after completing the Multi-Agent structure.
+            optimizer = optim.Adam(qnet.parameters(), lr=LR)
+            self.q_networks.append(qnet)
+            self.target_networks.append(tnet)
+            self.optimizers.append(optimizer)
+```
+2. Shared Replay Buffer
+```python
+class ReplayBuffer:
+    def __init__(self, capacity=100_000):
+        self.buffer = deque(maxlen=capacity)
+
+    def add(self, obs, action, reward, next_obs, done):
+        self.buffer.append((obs, action, reward, next_obs, done))
+
+    def sample(self, batch_size=32):
+        batch = random.sample(self.buffer, batch_size)
+        obs, acts, rews, next_obs, dones = zip(*batch)
+        obs      = np.stack(obs)
+        acts     = np.array(acts, dtype=np.int64)
+        rews     = np.array(rews, dtype=np.float32)
+        next_obs = np.stack(next_obs)
+        dones    = np.array(dones, dtype=np.float32)
+        return obs, acts, rews, next_obs, dones
+
+    def __len__(self):
+        return len(self.buffer)
+```
+### 3. Adaptive Action Selection
+
+The **Adaptive Action Selection** mechanism in the RDE framework ensures robust and stable decision-making by leveraging the ensemble of agents' Q-values. This mechanism dynamically combines the actions proposed by individual agents into a single action, prioritizing stable agents and mitigating the influence of recently reset agents. Below are the key details of the implementation:
+
+1. **Softmax-Based Weighting**
+    - Actions are selected using a softmax function applied to the Q-values from the *oldest* agent. This mechanism ensures that actions with higher Q-values are assigned greater probabilities, while lower Q-values are still considered, providing a balance between exploitation and exploration.
+
+#### 3.1 Implementation
+
+```python
+
+    def select_action(self, obs_np, epsilon=0.05):
+        """
+        Epsilon-greedy on top of the ensemble composition.
+        Each agent picks argmax Q_i(s). Then a softmax weighting
+        from the 'oldest' agent's Q-values on those actions.
+        """
+        if random.random() < epsilon:
+            return random.randint(0, self.n_actions-1)
+
+        # channels-last => channels-first => torch
+        obs_ch_first = np.transpose(obs_np, (2,0,1))
+        obs_t = torch.from_numpy(obs_ch_first).unsqueeze(0).float().to(self.device)
+
+        # gather each agent's argmax
+        candidate_actions = []
+        with torch.no_grad():
+            for qnet in self.q_networks:
+                qvals = qnet(obs_t)
+                act_i = qvals.argmax(dim=1).item()
+                candidate_actions.append(act_i)
+
+        # Use Q-values from 'oldest' agent
+        oldest = self.oldest_agent_idx
+        with torch.no_grad():
+            qvals_oldest = self.q_networks[oldest](obs_t).squeeze(0)
+
+        # for each agent's chosen action, get Q_oldest(s, a_i)
+        r_values = []
+        for act in candidate_actions:
+            r_values.append(qvals_oldest[act].item())
+
+        # softmax
+        max_r = max(abs(r) for r in r_values) if r_values else 1.0
+        if max_r == 0:
+            max_r = 1.0
+        scaled_r = [(val / max_r)*self.softmax_beta for val in r_values]
+        exp_r = np.exp(scaled_r)
+        sum_exp = np.sum(exp_r)
+        if sum_exp < 1e-9:
+            probs = np.ones(self.n_ensemble) / self.n_ensemble
+        else:
+            probs = exp_r / sum_exp
+
+        chosen_idx = np.random.choice(self.n_ensemble, p=probs)
+        return candidate_actions[chosen_idx]
+
+```
 
 # 3. Experiments and results
 
