@@ -1,0 +1,7 @@
+# python>=3.10.12
+ale-py>=0.10.1
+numpy>=1.26.4
+# torch>=2.5.1 # instructions on https://pytorch.org
+stable_baselines3>=2.4.0
+tensorboardX>=2.6.2.2
+tensorboard>=2.18.0
