@@ -312,7 +312,7 @@ tensorboard==2.18.0
 ```
 
 ## 3.3. Results
-We have used the hyperparameters given in the paper Table 3 and Table 4,[[1]].
+We have used the hyperparameters given as Table 3 and Table 4 in the paper[[1]].
 
 <!-- Action results table here -->
 
